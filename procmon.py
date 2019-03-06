@@ -10,8 +10,11 @@ import logging
 
 def go(command, port, delay):
 
+
+    # TODO: if the target crashes, its socket may remain open
+
     # start the process
-    p = subprocess.Popen(shlex.split(command), stdout=None, stderr=subprocess.DEVNULL)
+    p = subprocess.Popen(shlex.split(command), stdout=None, stderr=None)
 
     # start listening for commands from the fuzzing engine
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -30,13 +33,16 @@ def go(command, port, delay):
                     break
                 if b"restart" in data:
                     # start the process
-                    p = subprocess.Popen(shlex.split(command), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    logging.info('Restarting process')
+                    p = subprocess.Popen(shlex.split(command), stdout=None, stderr=None)
                     time.sleep(delay)
 
                     # if process is still alive after delay, return y, else n
                     if p.poll() is None:
+                        logging.info('PROCESS RESTARTED')
                         conn.send(b"y")
                     else:
+                        logging.info('FAILED TO RESTART')
                         conn.send(b"n")
                 if b"alive" in data:
                     # check if the target is alive
@@ -48,6 +54,7 @@ def go(command, port, delay):
                         conn.send(b"n")
                 else:
                     logging.info('Received unknown message')
+                    logging.info(data)
                     conn.send(b"Unknown message")
 
 

@@ -22,19 +22,63 @@ start_session(MonitorStream, TargetHost, TargetPort) :-
     % define protocol messages
     define_messages,
 
+    % if target is not alive, restart it
+    ( target_alive(MonitorStream)
+    -> true
+    ; restart_target(MonitorStream)
+    ),
+
+    % if multiple conversations, number them and go through numbers here. then call conversation(Stream, number)
+
     % connect to target
     setup_call_cleanup(
         tcp_connect(TargetHost:TargetPort, FuzzStream, []),
-        conversation(MonitorStream, FuzzStream),
-        close(FuzzStream)).
+        catch(conversation(FuzzStream), _Error, true),
+        close(FuzzStream)),
+
+    % conversation succeeded until now, return true if the target has crashed
+    \+ target_alive(MonitorStream).
 
 
 
 % define protocol messages
 %
 define_messages() :-
-    string(Message),
-    b_setval(one, Message).
+
+    % splitmessage
+    fuzz_integer(Int1),
+    fuzz_integer(Int2),
+    fuzz_integer(Int3),
+    fuzz_integer(Int4),
+    fuzz_integer(Int5),
+    atom_concat(Int1, '#', Msg1),
+    atom_concat(Msg1, Int2, Msg2),
+    atom_concat(Msg2, '#', Msg3),
+    atom_concat(Msg3, Int3, Msg4), 
+    atom_concat(Msg4, '#', Msg5),
+    atom_concat(Msg5, Int4, Msg6), 
+    atom_concat(Msg6, '#', Msg7),
+    atom_concat(Msg7, Int5, Msg8),
+    b_setval(splitmessage, Msg8),
+
+    % hellomessage
+    string(HelloMsg); HelloMsg = 'hello',
+    b_setval(hellomessage, HelloMsg),
+
+    % onemessage
+    string(OneMsg); OneMsg = 'one',
+    b_setval(onemessage, OneMsg),
+
+    % splitmessage reply
+    Splitreply = Int1;
+    Splitreply = Int2;
+    Splitreply = Int3;
+    Splitreply = Int4;
+    Splitreply = Int5,
+    b_setval(splitreply, Splitreply),
+
+    b_setval(helloreply, 'hello'),
+    b_setval(onereply, 'two').
 
 
 
@@ -42,16 +86,41 @@ define_messages() :-
 %
 % +MonitorStream - socket stream to process monitor
 % +FuzzStream - socket stream to target process
-conversation(MonitorStream, FuzzStream) :-
+conversation(FuzzStream) :-
 
-    % TODO what to do if the target process has crashed
-    b_getval(one, Message),
-    send(FuzzStream, Message),
-    
-    get_char(FuzzStream, 'y'),
 
+    writeln('first'),
+
+    % send onemessage
+    b_getval(onemessage, Message),
     send(FuzzStream, Message),
-    target_alive(MonitorStream).
+
+    % get onereply
+    b_getval(onereply, Onereply),
+    read_string(FuzzStream, _, Onereply),
+
+    writeln('second'),
+
+    % send hellomessage
+    b_getval(hellomessage, Hellomessage),
+    send(FuzzStream, Hellomessage),
+
+    % get helloreply
+    b_getval(helloreply, Helloreply),
+    read_string(FuzzStream, _, Helloreply),
+
+    writeln('third'),
+
+    % send splitmessage
+    b_getval(splitmessage, Splitmessage),
+    send(FuzzStream, Splitmessage),
+
+    % get splitreplies
+    string_length(Splitmessage, Length),
+    ReplyLength = Length - 4,
+    read_string(FuzzStream, ReplyLength, _).
+
+
 
 
 % send sends message to socket
@@ -64,16 +133,13 @@ send(StreamPair, Message) :-
 
 
 % check if target process is still alive
+% if not, log crash and restart target
 %
 % +StreamPair - socket stream
 target_alive(StreamPair) :-
     format(StreamPair, 'alive', []),
     flush_output(StreamPair),
-    (
-        \+ get_char(StreamPair, 'y') % use line oriented instead
-            -> logCrash(), restart_target(StreamPair), fail  % TODO: restart the process here
-        ; true     
-    ).
+    get_char(StreamPair, 'y'). % use line oriented instead
     
 
 % log data to file that caused crash
@@ -90,7 +156,7 @@ logCrash() :-
         open(Filename, write, Stream),
         write(Stream, Value),
         close(Stream)).
-        
+
 
 % restart target process
 %
@@ -98,13 +164,10 @@ logCrash() :-
 restart_target(StreamPair) :-
     format(StreamPair, 'restart', []),
     flush_output(StreamPair),
-    (
-        \+ get_char(StreamPair, 'y') % use line oriented instead
-            -> true
-        ;
-        % restarting failed, abort
-        writeln('Restarting target failed, aborting.'),
-        abort
+
+    ( get_char(StreamPair, 'y')
+    -> true
+    ; throw('Restarting target failed, aborting.')
     ).
 
 
