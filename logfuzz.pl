@@ -1,3 +1,8 @@
+% use datatype modules
+?- use_module(datatype/string).
+?- use_module(datatype/integer).
+
+
 % fuzz
 %
 % +MonitorHost host of the monitor process
@@ -61,20 +66,18 @@ define_messages() :-
     atom_concat(Msg7, Int5, Msg8),
     b_setval(splitmessage, Msg8),
 
+    writeln(uaaa),
+
     % hellomessage
-    string(HelloMsg); HelloMsg = 'hello',
+    string(HelloMsg),
     b_setval(hellomessage, HelloMsg),
 
     % onemessage
-    string(OneMsg); OneMsg = 'one',
+    string(OneMsg),
     b_setval(onemessage, OneMsg),
 
     % splitmessage reply
-    Splitreply = Int1;
-    Splitreply = Int2;
-    Splitreply = Int3;
-    Splitreply = Int4;
-    Splitreply = Int5,
+    Splitreply = Int1,
     b_setval(splitreply, Splitreply),
 
     b_setval(helloreply, 'hello'),
@@ -169,17 +172,3 @@ restart_target(StreamPair) :-
     -> true
     ; throw('Restarting target failed, aborting.')
     ).
-
-
-
-% strings
-string('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA').
-string('BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB').
-
-% integers
-fuzz_integer(-1).
-fuzz_integer(0).
-fuzz_integer(-9999).
-fuzz_integer(9999).
-
-% bytes
